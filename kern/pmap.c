@@ -56,10 +56,6 @@ i386_detect_memory(void)
 		totalmem, basemem, totalmem - basemem);
 
 	cprintf("Total pages: %d, BasePages: %d\n", npages, npages_basemem);
-<<<<<<< HEAD
-=======
-
->>>>>>> a5cec0dbcb1744c5b3453ba91644f12e92f9e05e
 }
 
 
@@ -111,12 +107,6 @@ static void *boot_alloc(uint32_t n) {
 	result = nextfree;
 	nextfree += ROUNDUP(n, PGSIZE);
 
-<<<<<<< HEAD
-=======
-	result = nextfree;
-	nextfree += ROUNDUP(n, PGSIZE);
-
->>>>>>> a5cec0dbcb1744c5b3453ba91644f12e92f9e05e
 	if (((uint32_t) nextfree - KERNBASE) > (npages * PGSIZE)) {
 		panic("Memory not sufficient! Requested %uK, available %uK.\n", (uint32_t) nextfree / 1024, npages * PGSIZE / 1024);
 	}
@@ -271,7 +261,6 @@ page_init(void)
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	page_free_list = NULL;
-<<<<<<< HEAD
 	size_t i;
 	for (i = 0; i < npages; i++) {
 		if (i == 0){ // BIOS (RESTRICTED)
@@ -294,30 +283,7 @@ page_init(void)
 			page_free_list = &pages[i];
 		}
 	}
-=======
-		size_t i;
-		for (i = 0; i < npages; i++) {
-			if (i == 0){ // BIOS
-				pages[i].pp_ref = 0;
-				pages[i].pp_link = NULL;
-			}else if (i < npages_basemem){
-				pages[i].pp_ref = 0;
-				pages[i].pp_link = page_free_list;
-				page_free_list = &pages[i];
-			}else if ((i<<PGSHIFT) < EXTPHYSMEM){
-				pages[i].pp_ref = 1;
-				pages[i].pp_link = NULL;
-			}else if (i<(((uint32_t)boot_alloc(0) - KERNBASE)>>PGSHIFT)){ 
-				pages[i].pp_ref = 1;
-				pages[i].pp_link = NULL;
-				//cprintf("Boot Alloc zero: %d\n",i);
-			}else{
-				pages[i].pp_ref = 0;
-				pages[i].pp_link = page_free_list;
-				page_free_list = &pages[i];
-			}
-		}
->>>>>>> a5cec0dbcb1744c5b3453ba91644f12e92f9e05e
+
 	cprintf("page_free_list: %x\n", page_free_list);
 }
 
