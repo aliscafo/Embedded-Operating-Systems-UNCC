@@ -54,6 +54,8 @@ i386_detect_memory(void)
 
 	cprintf("Physical memory: %uK available, base = %uK, extended = %uK\n",
 		totalmem, basemem, totalmem - basemem);
+
+	cprintf("Total pages: %d, BasePages: %d\n", npages, npages_basemem);
 }
 
 
@@ -95,6 +97,7 @@ boot_alloc(uint32_t n)
 	if (!nextfree) {
 		extern char end[];
 		nextfree = ROUNDUP((char *) end, PGSIZE);
+		cprintf("Value of end: %p\n", end);
 	}
 
 	// Allocate a chunk large enough to hold 'n' bytes, then update
@@ -102,8 +105,14 @@ boot_alloc(uint32_t n)
 	// to a multiple of PGSIZE.
 	//
 	// LAB 2: Your code here.
+	result = nextfree;
+	nextfree += ROUNDUP(n, PGSIZE);
 
-	return NULL;
+	if (((uint32_t) nextfree - KERNBASE) > (npages * PGSIZE)) {
+		panic("Memory not sufficient! Requested %uK, available %uK.\n", (uint32_t) nextfree / 1024, npages * PGSIZE / 1024);
+	}
+
+	return result;
 }
 
 // Set up a two-level page table:
@@ -125,7 +134,7 @@ mem_init(void)
 	i386_detect_memory();
 
 	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
+	//panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -148,11 +157,12 @@ mem_init(void)
 	// array.  'npages' is the number of physical pages in memory.  Use memset
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
-
+	pages = (struct PageInfo *) boot_alloc(npages * sizeof(struct PageInfo));
+	memset(pages, 0, npages * sizeof(struct PageInfo));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
-	// up the list of free physical pages. Once we've done so, all further
+		// up the list of free physical pages. Once we've done so, all further
 	// memory management will go through the page_* functions. In
 	// particular, we can now map memory using boot_map_region
 	// or page_insert
@@ -251,12 +261,30 @@ page_init(void)
 	// Change the code to reflect this.
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
+	page_free_list = NULL;
 	size_t i;
 	for (i = 0; i < npages; i++) {
-		pages[i].pp_ref = 0;
-		pages[i].pp_link = page_free_list;
-		page_free_list = &pages[i];
+		if (i == 0){ // BIOS (RESTRICTED)
+			pages[i].pp_ref = 0;
+			pages[i].pp_link = NULL;
+		}else if (i < npages_basemem){ // Remaining base memory (FREE)
+			pages[i].pp_ref = 0;
+			pages[i].pp_link = page_free_list;
+			page_free_list = &pages[i];
+		}else if ((i<<PGSHIFT) < EXTPHYSMEM){ // IO hole (RESTRICTED)
+			pages[i].pp_ref = 0;
+			pages[i].pp_link = NULL;
+		}else if (i<(((uint32_t)boot_alloc(0) - KERNBASE)>>PGSHIFT)){ // Page dir + pages (RESTRICTED)
+			pages[i].pp_ref = 0;
+			pages[i].pp_link = NULL;
+			//cprintf("Boot Alloc zero: %d\n",i);
+		}else{ // After pages free memory (FREE)
+			pages[i].pp_ref = 0;
+			pages[i].pp_link = page_free_list;
+			page_free_list = &pages[i];
+		}
 	}
+	cprintf("page_free_list: %x\n", page_free_list);
 }
 
 //
