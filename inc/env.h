@@ -38,7 +38,7 @@ enum {
 	ENV_NOT_RUNNABLE
 };
 
-// Special environment types
+// Special environment types env_type
 enum EnvType {
 	ENV_TYPE_USER = 0,
 };

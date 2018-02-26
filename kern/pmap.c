@@ -167,7 +167,7 @@ void mem_init(void)
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
-		// up the list of free physical pages. Once we've done so, all further
+	// up the list of free physical pages. Once we've done so, all further
 	// memory management will go through the page_* functions. In
 	// particular, we can now map memory using boot_map_region
 	// or page_insert
@@ -573,10 +573,22 @@ static uintptr_t user_mem_check_addr;
 // Returns 0 if the user program can access this range of addresses,
 // and -E_FAULT otherwise.
 //
-int
-user_mem_check(struct Env *env, const void *va, size_t len, int perm)
-{
+int user_mem_check(struct Env *env, const void *va, size_t len, int perm) {
+	
 	// LAB 3: Your code here.
+	cprintf("user_mem_check va: %x, len: %x\n", va, len);
+	uint32_t begin = (uint32_t) ROUNDDOWN(va, PGSIZE); 
+	uint32_t end = (uint32_t) ROUNDUP(va+len, PGSIZE);
+	uint32_t i;
+	for (i = (uint32_t)begin; i < end; i+=PGSIZE) {
+		pte_t *pte = pgdir_walk(env->env_pgdir, (void*)i, 0);
+		//print(pte);
+		if ((i>=ULIM) || !pte || !(*pte & PTE_P) || ((*pte & perm) != perm)) {
+			user_mem_check_addr = (i);
+			return -E_FAULT;
+		}
+	}
+	cprintf("user_mem_check success va: %x, len: %x\n", va, len);
 
 	return 0;
 }
