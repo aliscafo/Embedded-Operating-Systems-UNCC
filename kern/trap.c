@@ -22,6 +22,7 @@ static struct Taskstate ts;
  */
 static struct Trapframe *last_tf;
 
+
 /* Interrupt descriptor table.  (Must be built at run time because
  * shifted function addresses can't be represented in relocation records.)
  */
@@ -65,14 +66,13 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
-
 void
 trap_init(void)
 {
 	extern struct Segdesc gdt[];
-
+	int i;
+	extern void (*funs[])();
 	// LAB 3: Your code here.
-// LAB 3: Your code here.
 	void th0();
 	void th1();
 	void th3();
@@ -105,6 +105,14 @@ trap_init(void)
 	SETGATE(idt[14], 0, GD_KT, th14, 0);
 	SETGATE(idt[16], 0, GD_KT, th16, 0);
 	SETGATE(idt[48], 0, GD_KT, th48, 3);
+	/*
+	for (i = 0; i <= 16; ++i)
+	if (i==T_BRKPT)
+		SETGATE(idt[i], 0, GD_KT, funs[i], 3)
+	else if (i!=2 && i!=15) {
+		SETGATE(idt[i], 0, GD_KT, funs[i], 0);
+	}
+*/
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -140,18 +148,18 @@ trap_init_percpu(void)
 
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
-	ts.ts_esp0 = KSTACKTOP;
-	ts.ts_ss0 = GD_KD;
-	ts.ts_iomb = sizeof(struct Taskstate);
+	int cid = thiscpu->cpu_id;
+	thiscpu->cpu_ts.ts_esp0 = KSTACKTOP - cid * (KSTKSIZE + KSTKGAP);
+	thiscpu->cpu_ts.ts_ss0 = GD_KD;
 
 	// Initialize the TSS slot of the gdt.
-	gdt[GD_TSS0 >> 3] = SEG16(STS_T32A, (uint32_t) (&ts),
-					sizeof(struct Taskstate) - 1, 0);
-	gdt[GD_TSS0 >> 3].sd_s = 0;
+	gdt[(GD_TSS0 >> 3)+cid] = SEG16(STS_T32A, (uint32_t) (&(thiscpu->cpu_ts)),
+					sizeof(struct Taskstate), 0);
+	gdt[(GD_TSS0 >> 3)+cid].sd_s = 0;
 
 	// Load the TSS selector (like other segment selectors, the
 	// bottom three bits are special; we leave them 0)
-	ltr(GD_TSS0);
+	ltr(GD_TSS0+8*cid);
 
 	// Load the IDT
 	lidt(&idt_pd);
@@ -202,12 +210,40 @@ print_regs(struct PushRegs *regs)
 	cprintf("  ecx  0x%08x\n", regs->reg_ecx);
 	cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
-
+/*
+int32_t
+syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+	int ret = 0;
+	switch (syscallno) {
+		case SYS_cputs: 
+			sys_cputs((char*)a1, a2);
+			ret = 0;
+			break;
+		case SYS_cgetc:
+			ret = sys_cgetc();
+			break;
+		case SYS_getenvid:
+			ret = sys_getenvid();
+			break;
+		case SYS_env_destroy:
+			sys_env_destroy(a1);
+			ret = 0;
+			break;
+		default:
+			ret = -E_INVAL;
+	}
+	// cprintf("ret: %x\n", ret);
+	return ret;
+	panic("syscall not implemented");
+}
+*/
 static void
 trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
@@ -222,8 +258,26 @@ trap_dispatch(struct Trapframe *tf)
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
 
+
+	
+	if (tf->tf_trapno == T_PGFLT) {
+		page_fault_handler(tf);
+		return;
+	}
+
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
+	if (tf->tf_trapno == T_BRKPT) {
+	monitor(tf);
+	return;
+		}
+	if (tf->tf_trapno == T_SYSCALL) {
+		cprintf("SYSTEM CALL\n");
+		tf->tf_regs.reg_eax = 
+			syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx, tf->tf_regs.reg_ecx,
+				tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);
+		return;
+	}
 	if (tf->tf_cs == GD_KT)
 		panic("unhandled trap in kernel");
 	else {
@@ -305,7 +359,6 @@ page_fault_handler(struct Trapframe *tf)
 	// LAB 3: Your code here.
 	if ((tf->tf_cs&3) == 0)
 		panic("Kernel page fault!");
-
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 
