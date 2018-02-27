@@ -412,9 +412,7 @@ cons_intr(int (*proc)(void))
 }
 
 // return the next input character from the console, or 0 if none waiting
-int
-cons_getc(void)
-{
+int cons_getc(void) {
 	int c;
 
 	// poll for any pending input characters,

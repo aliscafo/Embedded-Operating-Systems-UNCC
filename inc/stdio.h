@@ -8,7 +8,7 @@
 #endif /* !NULL */
 
 // lib/console.c
-void	cputchar(int c);
+void cputchar(int c);
 int	getchar(void);
 int	iscons(int fd);
 
