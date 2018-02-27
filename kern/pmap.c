@@ -273,6 +273,14 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
+	int i;
+	for (i = 0; i < NCPU; ++i) {
+		boot_map_region(kern_pgdir, 
+			KSTACKTOP - KSTKSIZE - i * (KSTKSIZE + KSTKGAP), 
+			KSTKSIZE, 
+			PADDR(percpu_kstacks[i]), 
+			PTE_W);
+	}
 
 }
 
@@ -315,7 +323,7 @@ page_init(void)
 	page_free_list = NULL;
 	size_t i;
 	for (i = 0; i < npages; i++) {
-		if (i == 0){ // BIOS (RESTRICTED)
+		if (i == 0 || i == PGNUM(MPENTRY_PADDR)){ // BIOS (RESTRICTED)
 			pages[i].pp_ref = 0;
 			pages[i].pp_link = NULL;
 		}else if (i < npages_basemem){ // Remaining base memory (FREE)
@@ -619,7 +627,15 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	//panic("mmio_map_region not implemented");
+
+	size = ROUNDUP(pa+size, PGSIZE);
+	pa = ROUNDDOWN(pa, PGSIZE);
+	size -= pa;
+	if (base+size >= MMIOLIM) panic("not enough memory");
+	boot_map_region(kern_pgdir, base, size, pa, PTE_PCD|PTE_PWT|PTE_W);
+	base += size;
+	return (void*) (base - size);
 }
 
 static uintptr_t user_mem_check_addr;
